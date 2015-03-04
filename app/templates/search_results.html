@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Search results for "{{query}}":</h1>
+{% for post in results %}
+	<table>
+    <tr valign="top">
+        <td><img src={{ url_for('static', filename = 'avatar.jpg')}} height = "50px" width = "50px"></td><td><i>{{post.author.nickname}} says:</i><br>{{post.body}}</td>
+    </tr>
+	</table>
+{% endfor %}
+{% endblock %}

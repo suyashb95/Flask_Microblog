@@ -1,0 +1,10 @@
+<table>
+    <tr valign="top">
+        <td><img src={{ url_for('static', filename = 'avatar.jpg')}} height = "60px" width = "60px"></td><td><i>{{post.author.nickname}} says:</i><br>{{post.body}}<br>	
+		{% if post.author.id == g.user.id %}
+			<a href = "{{ url_for('DeletePost',nickname = g.user.nickname,id = post.id)}}">Delete</a>
+		{% endif %}
+		<br>
+		</td>
+    </tr>
+</table>
