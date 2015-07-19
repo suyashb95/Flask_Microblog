@@ -7,7 +7,7 @@ from datetime import datetime
 from config import POSTS_PER_PAGE,MAX_SEARCH_RESULTS
 import os,uuid
 
-@app.route('/')
+@app.route('/',methods = ['GET','POST'])
 @app.route('/index',methods = ['GET','POST'])
 @app.route('/index/<int:page>',methods = ['GET','POST'])
 @login_required
@@ -24,47 +24,49 @@ def index(page = 1):
 	
 @lm.user_loader
 def load_user(id):
-    return User.query.get(int(id))
+	return User.query.get(int(id))
 	
 @app.route('/login', methods = ['GET', 'POST'])
 @oid.loginhandler
 def login():
-    if g.user is not None and g.user.is_authenticated():
-        return redirect(url_for('index'))
-    form = LoginForm()
-    if form.validate_on_submit():
-        session['remember_me'] = form.remember_me.data
-        return oid.try_login(form.openid.data, ask_for = ['nickname', 'email'])
-    return render_template('login.html', 
-        title = 'Sign In',
-        form = form, providers = app.config['OPENID_PROVIDERS'])
+	if g.user is not None and g.user.is_authenticated():
+		return redirect(url_for('index'))
+	form = LoginForm()
+	if form.validate_on_submit():
+		session['remember_me'] = form.remember_me.data
+		return oid.try_login(form.openid.data, ask_for = ['nickname', 'email'])
+	return render_template('login.html', 
+		title = 'Sign In',
+		form = form, providers = app.config['OPENID_PROVIDERS'])
 		
 @oid.after_login
 def after_login(resp):
-    if resp.email is None or resp.email == "":
-        flash('Invalid login. Please try again.')
-        return redirect(url_for('login'))
-    user = User.query.filter_by(email = resp.email).first()
-    if user is None:
+	if resp.email is None or resp.email == "":
+		flash('Invalid login. Please try again.')
+		return redirect(url_for('login'))
+	user = User.query.filter_by(email = resp.email).first()
+	if user is None:
 		Nickname = resp.nickname
 		if Nickname is None or Nickname == "":
 			Nickname = resp.email.split('@')[0]
 		Nickname = User.make_unique_nickname(Nickname)
 		user = User(nickname = Nickname, email = resp.email, role = ROLE_USER)
 		db.session.add(user)
+		user = user.follow(user)
 		db.session.commit()
-		db.session.add(user.follow(user))
-		db.session.commit()
-    remember_me = False
-    if 'remember_me' in session:
-        remember_me = session['remember_me']
-        session.pop('remember_me', None)
-    login_user(user, remember = remember_me)
-    return redirect(request.args.get('next') or url_for('index'))
+		#db.session.add(user.follow(user))
+	remember_me = False
+	if 'remember_me' in session:
+		remember_me = session['remember_me']
+		session.pop('remember_me', None)
+	login_user(user, remember = remember_me)
+	return redirect(request.args.get('next') or url_for('index'))
 
 @app.before_request
 def before_request():
 	g.user = current_user
+	if 'openid' in session:
+		openid = session['openid']
 	if g.user.is_authenticated():
 		g.user.last_seen = datetime.utcnow()
 		db.session.add(g.user)
@@ -73,9 +75,11 @@ def before_request():
 	
 @app.route('/logout')
 def logout():
-    logout_user()
-    return redirect(url_for('index'))
+	session.pop('openid', None)
+	logout_user()
+	return redirect(url_for('index'))
 	
+@app.route('/user/<nickname>/<int:page>',methods = ['GET','POST'])
 @app.route('/user/<nickname>')
 @login_required
 def user(nickname,page = 1):
@@ -109,19 +113,20 @@ def follow(nickname):
 	if user == None:
 		flash('User' + nickname + ' not found.')
 		return redirect(url_for('index'))
-	#if user == g.user:
-	#	flash('You can\'t follow yourself.')
-	#	return redirect(url_for('user',nickname = nickname))
+	if user == g.user:
+		flash('You can\'t follow yourself.')
+		return redirect(url_for('user',nickname = nickname))
 	u = g.user.follow(user)
 	if u is None:
 		flash('Cannot follow ' + nickname + '.')
 		return redirect(url_for('user',nickname = nickname))
 	db.session.add(u)
 	db.session.commit()
-	if user == g.user:
-		flash('You are now following yourself.')
-	else:
-		flash('You are now following ' + nickname + '.')
+	#if user == g.user:
+	#	flash('You are now following yourself.')
+	#else:
+	#	flash('You are now following ' + nickname + '.')
+	flash('You are now following ' + nickname + '.')
 	return redirect(url_for('user',nickname = nickname))
 
 @app.route('/unfollow/<nickname>')
@@ -131,30 +136,36 @@ def unfollow(nickname):
 	if user == None:
 		flash('User ' + nickname + ' not found.')
 		return redirect(url_for('index'))
-	#if user == g.user:
-	#	flash('You can\'t unfollow yourself.')
-	#	return redirect(url_for('user',nickname = nickname))
+	if user == g.user:
+		flash('You can\'t unfollow yourself.')
+		return redirect(url_for('user',nickname = nickname))
 	u = g.user.unfollow(user)
 	if u is None:
-		flash('Cannot unfollow ' +  nickname + '.')
+		flash('Cannot unfollow ' +	nickname + '.')
 		return redirect(url_for('user',nickname = nickname))
 	db.session.add(u)
 	db.session.commit()
-	if user == g.user:
-		flash('You have stopped following yourself.')
-	else:
-		flash('You have stopped following ' + nickname + '.')
+	#if user == g.user:
+	#	flash('You have stopped following yourself.')
+	#else:
+	#	flash('You have stopped following ' + nickname + '.')
+	flash('You have stopped following ' + nickname + '.')
 	return redirect(url_for('user',nickname = nickname))
 
-@app.route('/<nickname>/post/<id>')
+@app.route('/<nickname>/post/<id>/<source>')
 @login_required
-def DeletePost(nickname,id):
+def DeletePost(nickname,id,source):
+	host = request.headers.get('Host')
+	print host
 	post = Post.query.filter_by(id = id,user_id = g.user.id).first()
 	if post is not None:
 		db.session.delete(post)
 		db.session.commit()
 		flash('Post deleted.')
-	return redirect(url_for('index'))
+	if source == 'index':
+		return redirect(url_for(source))
+	else:
+		return redirect(url_for(source,nickname = nickname))
 
 @app.route('/search',methods = ['POST'])
 @login_required

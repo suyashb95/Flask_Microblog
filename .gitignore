@@ -1,1 +1,7 @@
 flask/
+search.db/
+tmp/
+db_repository/
+.settings/
+*.pyc
+*.db

@@ -9,14 +9,16 @@
 			<h1>User: {{user.nickname}}</h1>
 			{% if user.about_me %}<p>{{user.about_me}}</p>{% endif %}
 			{% if user.last_seen %}<p><i>Last seen on: {{user.last_seen}}</i></p>{% endif %}
-			<p>{{user.followers.count()}} followers |
+			<p>{{user.followers.count() -1}} followers |
 			{% if user.id == g.user.id %}
 				<a href = "{{url_for('edit')}}">Edit your Profile</a> |
 			{% endif %}
-			{% if not g.user.is_following(user) %}
-				<a href = "{{url_for('follow',nickname = user.nickname)}}">Follow</a>
-			{% else %}
-				<a href = "{{url_for('unfollow',nickname = user.nickname)}}">Unfollow</a>
+			{% if g.user.nickname != user.nickname %}
+				{% if not g.user.is_following(user) %}
+					<a href = "{{url_for('follow',nickname = user.nickname)}}">Follow</a>
+				{% else %}
+					<a href = "{{url_for('unfollow',nickname = user.nickname)}}">Unfollow</a>
+			{% endif %}
 			{% endif %}
 			</p>
 		</td>
@@ -25,11 +27,17 @@
 </table>
 <hr>
 {% for post in posts.items %}
-<table>
+	<table>
     <tr valign="top">
-        <td><img src={{ url_for('static', filename = 'avatar.jpg')}} height = "60px" width = "60px"></td><td><i>{{post.author.nickname}} says:</i><br>{{post.body}}</td>
+        <td><img src={{ url_for('static', filename = 'avatar.jpg')}} height = "60px" width = "60px"></td><td><i>{{post.author.nickname}} says:</i><br>{{post.body}}<br>	
+		{% if post.author.id == g.user.id %}
+			<a href = "{{ url_for('DeletePost',nickname = g.user.nickname,id = post.id,source = 'user')}}">Delete</a>
+		{% endif %}
 		<br>
+		</td>
     </tr>
 </table>
 {% endfor %}
+{% if posts.has_prev %}<a href="{{ url_for('user',nickname = g.user.nickname, page = posts.prev_num)}}"><< Newer posts</a>{% else %}<< Newer posts{% endif %} | 
+{% if posts.has_next %}<a href="{{ url_for('user',nickname = g.user.nickname, page = posts.next_num)}}">Older posts >></a>{% else %}Older posts >>{% endif %}
 {% endblock %}
